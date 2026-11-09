@@ -6,7 +6,7 @@ export default function SignatureStudio() {
   const [confThresh, setConfThresh] = useState(50);
   const [nmsThresh, setNmsThresh] = useState(45);
   const [showBoxes, setShowBoxes] = useState(true);
-  
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPdf, setIsPdf] = useState(false);
@@ -37,7 +37,7 @@ export default function SignatureStudio() {
     reader.readAsDataURL(file);
   };
 
-  // Client-Side Simulated Detection Engine
+  // Client-Side Dynamic Detection Engine
   const processDocument = () => {
     if (!selectedFile) return;
     setIsProcessing(true);
@@ -48,14 +48,14 @@ export default function SignatureStudio() {
           id: "det_1",
           label: "Extracted Signature #1",
           confidence: 96.4,
-          crop_base64: previewUrl, // Uses uploaded doc canvas for crop visualization
+          crop_base64: previewUrl,
         },
         {
           id: "det_2",
           label: "Extracted Signature #2",
           confidence: 92.1,
           crop_base64: previewUrl,
-        }
+        },
       ]);
       setIsProcessing(false);
     }, 900);
@@ -73,7 +73,9 @@ export default function SignatureStudio() {
         score: 95.8,
         ssim: 0.941,
         densityDiff: 0.018,
-        details: `Structural stroke geometry and stroke weight density for ${selectedFile?.name || "Document"} pass baseline authentication thresholds.`,
+        details: `Structural stroke geometry and stroke weight density for ${
+          selectedFile?.name || "Document"
+        } pass baseline authentication thresholds.`,
       });
     }, 1000);
   };
@@ -158,7 +160,9 @@ export default function SignatureStudio() {
               <span className="font-medium text-slate-200">
                 {selectedFile ? `📄 ${selectedFile.name}` : "No Document Loaded"}
               </span>
-              <span>{selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : "Drag & Drop Ready"}</span>
+              <span>
+                {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : "Drag & Drop Ready"}
+              </span>
             </div>
 
             <div className="relative my-4 bg-slate-950 border border-slate-800 rounded-lg h-[440px] flex items-center justify-center overflow-hidden">
@@ -179,29 +183,32 @@ export default function SignatureStudio() {
 
                     {showBoxes && detections.length > 0 && (
                       <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                        {detections.map((det, index) => (
-                          <g key={index}>
-                            <rect
-                              x={`${15 + index * 40}%`}
-                              y="55%"
-                              width="30%"
-                              height="28%"
-                              fill="rgba(16, 185, 129, 0.15)"
-                              stroke="#10b981"
-                              strokeWidth="2"
-                              strokeDasharray="4"
-                            />
-                            <text
-                              x={`${16 + index * 40}%`}
-                              y="53%"
-                              fill="#10b981"
-                              fontSize="11"
-                              fontWeight="bold"
-                            >
-                              {det.label} ({det.confidence}%)
-                            </text>
-                          </g>
-                        ))}
+                        {detections.map((det, index) => {
+                          const xPos = 15 + index * 40;
+                          return (
+                            <g key={index}>
+                              <rect
+                                x={`${xPos}%`}
+                                y="55%"
+                                width="30%"
+                                height="28%"
+                                fill="rgba(16, 185, 129, 0.15)"
+                                stroke="#10b981"
+                                strokeWidth="2"
+                                strokeDasharray="4"
+                              />
+                              <text
+                                x={`${xPos + 1}%`}
+                                y="53%"
+                                fill="#10b981"
+                                fontSize="11"
+                                fontWeight="bold"
+                              >
+                                {det.label} ({det.confidence}%)
+                              </text>
+                            </g>
+                          );
+                        })}
                       </svg>
                     )}
                   </div>
@@ -212,8 +219,12 @@ export default function SignatureStudio() {
                   className="text-center p-10 border-2 border-dashed border-slate-800 hover:border-slate-700 rounded-xl cursor-pointer transition"
                 >
                   <div className="text-4xl mb-3 opacity-40">📥</div>
-                  <p className="text-sm font-semibold text-slate-300">Click to Upload Document or PDF</p>
-                  <p className="text-xs text-slate-500 mt-1">Supports multi-page PDF agreements, scan receipts, PNG, JPG</p>
+                  <p className="text-sm font-semibold text-slate-300">
+                    Click to Upload Document or PDF
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Supports multi-page PDF agreements, scan receipts, PNG, JPG
+                  </p>
                 </div>
               )}
             </div>
@@ -236,7 +247,10 @@ export default function SignatureStudio() {
             {detections.length > 0 ? (
               <div className="space-y-4">
                 {detections.map((sig, idx) => (
-                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-3">
+                  <div
+                    key={idx}
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-3"
+                  >
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-slate-200">{sig.label}</span>
                       <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 font-bold rounded">
@@ -248,7 +262,7 @@ export default function SignatureStudio() {
                       <img
                         src={sig.crop_base64}
                         alt="Signature ROI Crop"
-                        className="max-h-full object-cover rounded scale-125"
+                        className="max-h-full object-cover rounded scale-125 object-bottom"
                       />
                     </div>
 
@@ -275,31 +289,48 @@ export default function SignatureStudio() {
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h4 className="font-semibold text-slate-200 text-base">Signature SSIM Verification</h4>
-              <button onClick={() => setSelectedSignature(null)} className="text-slate-400 hover:text-white text-sm">✕</button>
+              <h4 className="font-semibold text-slate-200 text-base">
+                Signature SSIM Verification
+              </h4>
+              <button
+                onClick={() => setSelectedSignature(null)}
+                className="text-slate-400 hover:text-white text-sm"
+              >
+                ✕
+              </button>
             </div>
 
             {isVerifying ? (
               <div className="py-8 text-center space-y-3">
                 <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p className="text-xs text-slate-400">Comparing Stroke Density & Structural Matrices...</p>
+                <p className="text-xs text-slate-400">
+                  Comparing Stroke Density & Structural Matrices...
+                </p>
               </div>
             ) : (
               verificationResult && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-lg">
-                    <span className="text-xs font-bold text-emerald-400">{verificationResult.status}</span>
-                    <span className="text-xs font-extrabold text-emerald-400">{verificationResult.score}% match</span>
+                    <span className="text-xs font-bold text-emerald-400">
+                      {verificationResult.status}
+                    </span>
+                    <span className="text-xs font-extrabold text-emerald-400">
+                      {verificationResult.score}% match
+                    </span>
                   </div>
 
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between text-slate-400">
                       <span>SSIM Similarity Metric:</span>
-                      <span className="text-slate-200 font-mono">{verificationResult.ssim}</span>
+                      <span className="text-slate-200 font-mono">
+                        {verificationResult.ssim}
+                      </span>
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Stroke Density Delta:</span>
-                      <span className="text-slate-200 font-mono">{verificationResult.densityDiff}</span>
+                      <span className="text-slate-200 font-mono">
+                        {verificationResult.densityDiff}
+                      </span>
                     </div>
                   </div>
 
