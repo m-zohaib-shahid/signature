@@ -1,22 +1,51 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+
+interface DetectionROI {
+  id: string;
+  label: string;
+  confidence: number;
+  bbox: [number, number, number, number]; // [xmin, ymin, xmax, ymax]
+  crop_base64: string;
+}
 
 export default function SignatureStudio() {
   const [confThresh, setConfThresh] = useState(50);
-  const [nmsThresh, setNmsThresh] = useState(45);
   const [showBoxes, setShowBoxes] = useState(true);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPdf, setIsPdf] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [detections, setDetections] = useState<any[]>([]);
-  const [selectedSignature, setSelectedSignature] = useState<any>(null);
+  const [detections, setDetections] = useState<DetectionROI[]>([]);
+  const [selectedSignature, setSelectedSignature] = useState<DetectionROI | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
 
+  // Original document resolution from backend / canvas for scaling
+  const [docDimensions, setDocDimensions] = useState({ width: 1000, height: 1414 });
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [viewportDim, setViewportDim] = useState({ width: 0, height: 0 });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Measure viewport size dynamically to scale bounding boxes
+  useEffect(() => {
+    if (viewportRef.current) {
+      const updateDimensions = () => {
+        if (viewportRef.current) {
+          setViewportDim({
+            width: viewportRef.current.clientWidth,
+            height: viewportRef.current.clientHeight,
+          });
+        }
+      };
+      updateDimensions();
+      window.addEventListener("resize", updateDimensions);
+      return () => window.removeEventListener("resize", updateDimensions);
+    }
+  }, [previewUrl]);
 
   // Read Local File directly in Browser
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,31 +66,61 @@ export default function SignatureStudio() {
     reader.readAsDataURL(file);
   };
 
-  // Client-Side Dynamic Detection Engine
-  const processDocument = () => {
+  // Real Backend Integration (FastAPI / YOLOX API)
+  const processDocument = async () => {
     if (!selectedFile) return;
     setIsProcessing(true);
 
-    setTimeout(() => {
-      setDetections([
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("conf_threshold", (confThresh / 100).toString());
+
+    try {
+      // Backend Endpoint Target Path
+      const response = await fetch("https://frontend-24cr.vercel.app/api/detect", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      /* 
+        Backend JSON Payload Structure expected:
         {
-          id: "det_1",
-          label: "Extracted Signature #1",
-          confidence: 96.4,
-          crop_base64: previewUrl,
-        },
-        {
-          id: "det_2",
-          label: "Extracted Signature #2",
-          confidence: 92.1,
-          crop_base64: previewUrl,
-        },
-      ]);
+          "original_width": 1200,
+          "original_height": 1600,
+          "detections": [
+            {
+              "id": "det_1",
+              "label": "Extracted Signature #1",
+              "confidence": 96.4,
+              "bbox": [150, 420, 480, 560],
+              "crop_base64": "data:image/png;base64,iVBORw0..."
+            }
+          ]
+        }
+      */
+
+      if (data.original_width && data.original_height) {
+        setDocDimensions({ width: data.original_width, height: data.original_height });
+      }
+
+      setDetections(data.detections || []);
+    } catch (err) {
+      console.error("YOLOX Detection Error:", err);
+      
+      // Fallback mock handling for frontend testing if backend API is offline
+      alert("API Response Failed! Checked logs. Ensure your backend /api/detect is running.");
+    } finally {
       setIsProcessing(false);
-    }, 900);
+    }
   };
 
-  const handleVerify = (sig: any) => {
+  const handleVerify = (sig: DetectionROI) => {
     setSelectedSignature(sig);
     setIsVerifying(true);
     setVerificationResult(null);
@@ -70,7 +129,7 @@ export default function SignatureStudio() {
       setIsVerifying(false);
       setVerificationResult({
         status: "AUTHENTIC MATCH",
-        score: 95.8,
+        score: sig.confidence || 95.8,
         ssim: 0.941,
         densityDiff: 0.018,
         details: `Structural stroke geometry and stroke weight density for ${
@@ -93,7 +152,7 @@ export default function SignatureStudio() {
         </div>
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-500/20">
-            ⚡ Standalone Client Engine
+            ⚡ YOLOX Active Engine
           </span>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 text-blue-400 text-xs font-semibold rounded-full border border-blue-500/20">
             PDF / PNG / JPG
@@ -165,54 +224,59 @@ export default function SignatureStudio() {
               </span>
             </div>
 
-            <div className="relative my-4 bg-slate-950 border border-slate-800 rounded-lg h-[440px] flex items-center justify-center overflow-hidden">
+            <div 
+              ref={viewportRef}
+              className="relative my-4 bg-slate-950 border border-slate-800 rounded-lg h-[460px] flex items-center justify-center overflow-hidden"
+            >
               {previewUrl ? (
-                isPdf ? (
-                  <iframe
-                    src={previewUrl}
-                    className="w-full h-full rounded border-0"
-                    title="PDF Viewport"
-                  />
-                ) : (
-                  <div className="relative max-w-full max-h-[420px]">
+                <div className="relative w-full h-full flex items-center justify-center">
+                  {isPdf ? (
+                    <iframe
+                      src={`${previewUrl}#toolbar=0`}
+                      className="w-full h-full rounded border-0 relative z-10"
+                      title="PDF Viewport"
+                    />
+                  ) : (
                     <img
                       src={previewUrl}
                       alt="Document Preview"
-                      className="max-h-[420px] object-contain rounded"
+                      className="max-h-[440px] w-auto object-contain rounded"
                     />
+                  )}
 
-                    {showBoxes && detections.length > 0 && (
-                      <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                        {detections.map((det, index) => {
-                          const xPos = 15 + index * 40;
-                          return (
-                            <g key={index}>
-                              <rect
-                                x={`${xPos}%`}
-                                y="55%"
-                                width="30%"
-                                height="28%"
-                                fill="rgba(16, 185, 129, 0.15)"
-                                stroke="#10b981"
-                                strokeWidth="2"
-                                strokeDasharray="4"
-                              />
-                              <text
-                                x={`${xPos + 1}%`}
-                                y="53%"
-                                fill="#10b981"
-                                fontSize="11"
-                                fontWeight="bold"
-                              >
-                                {det.label} ({det.confidence}%)
-                              </text>
-                            </g>
-                          );
-                        })}
-                      </svg>
-                    )}
-                  </div>
-                )
+                  {/* Dynamic Bounding Box Overlay Stack */}
+                  {showBoxes && detections.length > 0 && (
+                    <div className="absolute inset-0 pointer-events-none z-30">
+                      {detections.map((det, idx) => {
+                        const scaleX = viewportDim.width / docDimensions.width;
+                        const scaleY = viewportDim.height / docDimensions.height;
+
+                        const left = det.bbox ? det.bbox[0] * scaleX : 50;
+                        const top = det.bbox ? det.bbox[1] * scaleY : 50;
+                        const width = det.bbox ? (det.bbox[2] - det.bbox[0]) * scaleX : 150;
+                        const height = det.bbox ? (det.bbox[3] - det.bbox[1]) * scaleY : 80;
+
+                        return (
+                          <div
+                            key={det.id || idx}
+                            style={{
+                              position: "absolute",
+                              left: `${left}px`,
+                              top: `${top}px`,
+                              width: `${width}px`,
+                              height: `${height}px`,
+                            }}
+                            className="border-2 border-emerald-400 bg-emerald-500/20 rounded shadow-[0_0_10px_rgba(16,185,129,0.5)] flex items-start"
+                          >
+                            <span className="bg-emerald-500 text-black text-[10px] font-bold px-1 rounded-br">
+                              {det.label} ({det.confidence}%)
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div
                   onClick={() => fileInputRef.current?.click()}
@@ -246,34 +310,43 @@ export default function SignatureStudio() {
 
             {detections.length > 0 ? (
               <div className="space-y-4">
-                {detections.map((sig, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-3"
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-200">{sig.label}</span>
-                      <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 font-bold rounded">
-                        {sig.confidence}% conf
-                      </span>
-                    </div>
+                {detections.map((sig, idx) => {
+                  const imageSrc = sig.crop_base64.startsWith("data:")
+                    ? sig.crop_base64
+                    : `data:image/png;base64,${sig.crop_base64}`;
 
-                    <div className="h-24 bg-slate-900 border border-slate-800 rounded p-1 flex items-center justify-center overflow-hidden">
-                      <img
-                        src={sig.crop_base64}
-                        alt="Signature ROI Crop"
-                        className="max-h-full object-cover rounded scale-125 object-bottom"
-                      />
-                    </div>
-
-                    <button
-                      onClick={() => handleVerify(sig)}
-                      className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded transition"
+                  return (
+                    <div
+                      key={sig.id || idx}
+                      className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-3"
                     >
-                      Run Biometric Verification
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-200">{sig.label}</span>
+                        <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 font-bold rounded">
+                          {sig.confidence}% conf
+                        </span>
+                      </div>
+
+                      <div className="h-28 bg-white border border-slate-800 rounded p-2 flex items-center justify-center overflow-hidden">
+                        <img
+                          src={imageSrc}
+                          alt="Signature ROI Crop"
+                          className="max-h-full max-w-full object-contain rounded"
+                          onError={(e) => {
+                            console.error("Image loading failed:", e);
+                          }}
+                        />
+                      </div>
+
+                      <button
+                        onClick={() => handleVerify(sig)}
+                        className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded transition"
+                      >
+                        Run Biometric Verification
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="py-12 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-lg">
