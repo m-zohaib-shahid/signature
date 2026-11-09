@@ -13,7 +13,7 @@ from app.auth import hash_password
 from app.config import settings
 from app.db import Base, SessionLocal, engine, get_db
 from app.models import User
-from app.routers import auth, jobs, registry, webhooks
+from app.routers import auth, jobs, registry, signature, webhooks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("api")
@@ -42,15 +42,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Signature Detection and Verification API",
-    version="0.1.0",
+    version="1.0.0",
     description="Async signature detection (YOLOX-S) and similarity API.",
     lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=False,
+    allow_origins=settings.cors_origins if hasattr(settings, "cors_origins") else ["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
@@ -81,7 +81,9 @@ def health(db: Session = Depends(get_db)):
     return {"status": "ok", "db": "ok", "version": app.version}
 
 
+# Routers Integration
 app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(webhooks.router)
 app.include_router(registry.router)
+app.include_router(signature.router)  # Naya Signature Intelligence Router
