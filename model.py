@@ -1,7 +1,6 @@
 from ultralytics import YOLO
 
-model = YOLO("best.pt") # Zubair se file lein
-
+model = YOLO("yolov8n.pt")
 def predict_image(image_path):
     results = model(image_path)
     defects = []
